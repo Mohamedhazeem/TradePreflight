@@ -1,0 +1,28 @@
+name: trade-preflight
+version: 0.1.0
+manifest_version: 2
+api_version: 1
+description: >-
+  Deterministic, fail-closed execution firewall for AI-initiated equity orders.
+  Normalizes broker-specific trade calls, evaluates them against an operator-owned
+  policy, and blocks anything that cannot be proven compliant.
+author: TradePreflight Contributors
+license: MIT
+homepage: https://github.com/tradepreflight/trade-preflight
+tags:
+  - trading
+  - guardrails
+  - execution-firewall
+  - paper-trading
+  - sqlite
+
+provides_tools:
+  - paper_place_order_a
+  - paper_place_order_b
+  - trade_check
+  - trade_policy_get
+  - trade_audit
+
+provides_hooks:
+  - pre_tool_call
+  - post_tool_call
