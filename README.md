@@ -8,9 +8,9 @@ they satisfy an operator-owned policy. It is deterministic, local-first, and
 fail-closed: if the plugin cannot prove an order is compliant, the order does not
 execute.
 
-> **Project status: Slice 0, 1, 2, and 3 complete.** The interception gate, the
-> broker-agnostic adapter/Decimal layer, the policy rule engine, and the
-> paper-trading ledger are live. Slice 4 (demo/hardening) remains.
+> **Project status: complete (Slices 0–4).** The interception gate, broker-agnostic
+> adapter/Decimal layer, policy rule engine, paper-trading ledger, and reproducible
+> demo are all live.
 
 ---
 
@@ -297,6 +297,18 @@ outside any directory the agent can write.
 - The plugin is not a substitute for a broker's own risk controls or regulatory
   obligations.
 
+## Demo
+
+Run the reproducible demo at any time:
+
+```bash
+python scripts/demo.py
+```
+
+It executes the three storyboard orders against the live plugin code, prints the
+audit trail, and reports `Handler invocation count: 1` and
+`Paper ledger rows: 1` — the same evidence the 90-second video shows.
+
 ## Development
 
 ```bash
@@ -323,7 +335,7 @@ Repository conventions:
 | 1 | `NormalizedOrder`, strict `Decimal` validation, Broker A/B adapters | **Done** |
 | 2 | Policy loading, schema validation, rule engine | **Done** |
 | 3 | Paper ledger writes, outcome correlation, `trade_audit` | **Done** |
-| 4 | Demo, hardening, full integration suite | Pending |
+| 4 | Demo, hardening, full integration suite | **Done** |
 
 Allowed orders now write one row to `paper_ledger` and return a
 `{"status": "SUCCESS", ...}` payload. Blocked orders leave the ledger unchanged.
