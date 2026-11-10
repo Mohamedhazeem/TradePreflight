@@ -1,8 +1,7 @@
 """Fail-closed Hermes lifecycle hooks.
 
-Slice 0 implementation: a hardcoded 100-share quantity gate proves that
-``pre_tool_call`` fires before the handler and can block it. The full policy
-engine replaces this gate in Slice 2.
+Slice 2 implementation: every guarded order is normalized through its broker
+adapter, evaluated against the operator policy, and blocked unless it complies.
 """
 
 from __future__ import annotations
@@ -11,7 +10,6 @@ import json
 import logging
 import uuid
 from collections.abc import Mapping
-from decimal import Decimal
 from typing import Any
 
 from ..adapters import GUARDED_TOOLS, get_adapter
@@ -24,15 +22,11 @@ from ..services.audit import (
     EXECUTION_SUCCEEDED,
     default_audit_store,
 )
-from ..services.engine import Decision
+from ..services.engine import Decision, PolicyEngine, load_policy
 
-__all__ = ["SLICE_0_QUANTITY_LIMIT", "post_tool_call", "pre_tool_call"]
+__all__ = ["post_tool_call", "pre_tool_call"]
 
 logger = logging.getLogger(__name__)
-
-#: Slice 0 policy: no single order may exceed 100 shares. Replaced by
-#: ``max_quantity`` from the operator policy in Slice 2.
-SLICE_0_QUANTITY_LIMIT: Decimal = Decimal("100")
 
 _FAIL_CLOSED_MESSAGE = (
     "TradePreflight blocked this order because policy evaluation failed. "
@@ -56,10 +50,6 @@ def _json_value(value: Any) -> str:
         return "{}"
 
 
-def _block_directive(tool_name: str, reason: str) -> dict[str, str]:
-    return {"action": "block", "message": f"TradePreflight blocked {tool_name}: {reason}"}
-
-
 def _record_decision(
     *,
     tool_call_id: str,
@@ -71,7 +61,7 @@ def _record_decision(
         tool_call_id=tool_call_id,
         tool_name=tool_name,
         order_json=_json_value(order.to_dict()),
-        decision=decision.allowed and "EXECUTION_ALLOWED" or "EXECUTION_BLOCKED",
+        decision=EXECUTION_ALLOWED if decision.allowed else EXECUTION_BLOCKED,
         reason=decision.reason,
         policy_hash=decision.policy_hash,
     )
@@ -111,42 +101,33 @@ def pre_tool_call(
         return None
 
     audit_id = _audit_id(tool_call_id)
+    policy_hash = ""
 
     try:
         raw_args = args if isinstance(args, Mapping) else {}
         order = adapter.normalize(raw_args)
+        policy = load_policy()
+        policy_hash = policy.sha256()
+        decision = PolicyEngine(policy).evaluate(order)
 
-        # --- Slice 0 hardcoded gate (replaced by the policy engine in Slice 2) ---
-        if order.quantity > SLICE_0_QUANTITY_LIMIT:
-            reason = (
-                f"quantity {order.quantity} exceeds the "
-                f"{SLICE_0_QUANTITY_LIMIT}-share limit"
-            )
-            _record_decision(
-                tool_call_id=audit_id,
-                tool_name=tool_name,
-                order=order,
-                decision=Decision(
-                    allowed=False,
-                    rule="max_quantity",
-                    reason=reason,
-                    policy_hash="",
-                ),
-            )
-            return _block_directive(tool_name, reason)
-
+        # If this write fails, the exception handler below blocks the order:
+        # an allowed order is never executed without an audit row.
         _record_decision(
             tool_call_id=audit_id,
             tool_name=tool_name,
             order=order,
-            decision=Decision(
-                allowed=True,
-                rule="max_quantity",
-                reason="Slice 0 quantity check passed",
-                policy_hash="",
-            ),
+            decision=decision,
         )
-        return None
+
+        if decision.allowed:
+            return None
+        return {
+            "action": "block",
+            "message": (
+                f"TradePreflight blocked {tool_name}: {decision.reason} "
+                f"[rule={decision.rule}; policy={decision.policy_hash[:12]}]"
+            ),
+        }
     except Exception as exc:
         logger.exception("TradePreflight failed closed for tool %s", tool_name)
         try:
@@ -154,7 +135,7 @@ def pre_tool_call(
                 tool_call_id=audit_id,
                 tool_name=tool_name,
                 args=args,
-                policy_hash="",
+                policy_hash=policy_hash,
                 exc=exc,
             )
         except Exception:

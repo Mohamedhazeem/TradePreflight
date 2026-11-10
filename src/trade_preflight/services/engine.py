@@ -31,16 +31,6 @@ PLUGIN_NAME: Final[str] = "trade-preflight"
 POLICY_FILENAME: Final[str] = "policy.json"
 _MAX_POLICY_BYTES: Final[int] = 1_000_000
 
-#: Rules in evaluation order for the implementation slice. Kept here as the
-#: executable contract; ``PolicyEngine.evaluate`` currently fails closed.
-RULE_ORDER: Final[tuple[str, ...]] = (
-    "max_gross_buy_notional_usd",
-    "max_quantity",
-    "symbol_allowlist",
-    "order_type_allowlist",
-    "side_allowlist",
-)
-
 
 @dataclass(frozen=True, slots=True)
 class Decision:
@@ -130,8 +120,6 @@ def load_policy(path: Path | None = None) -> Policy:
     if not isinstance(raw, Mapping):
         raise PolicyError("policy must be a JSON object")
 
-    # The canonical hash is computed from the validated value, never from raw
-    # bytes, so operator formatting and key order do not affect correlation.
     return Policy.from_mapping(raw)
 
 
@@ -148,24 +136,78 @@ class PolicyEngine:
         return self._policy
 
     def evaluate(self, order: NormalizedOrder) -> Decision:
-        """Evaluate one canonical order.
+        """Evaluate one canonical order against the operator policy.
 
-        TODO(Slice 2): implement the rules in ``RULE_ORDER``. Each rule must
-        return the first violation in operator-defined order and must include
-        the observed value and limit in ``reason``.
-
-        Until then this method deliberately returns a blocking decision. An
-        unfinished firewall must not allow orders.
+        Rules are applied in ``RULE_ORDER``. The first violation wins and is
+        reported with both the observed value and the configured limit.
         """
         if not isinstance(order, NormalizedOrder):
             raise TypeError("PolicyEngine.evaluate requires a NormalizedOrder")
 
+        policy = self._policy
+        policy_hash = policy.sha256()
+
+        if order.side not in policy.side_allowlist:
+            return Decision(
+                allowed=False,
+                rule="side_allowlist",
+                reason=(
+                    f"side {order.side!r} is not allowed "
+                    f"(allowed: {sorted(policy.side_allowlist)})"
+                ),
+                policy_hash=policy_hash,
+            )
+
+        if order.symbol not in policy.symbol_allowlist:
+            return Decision(
+                allowed=False,
+                rule="symbol_allowlist",
+                reason=(
+                    f"symbol {order.symbol!r} is not allowed "
+                    f"(allowed: {sorted(policy.symbol_allowlist)})"
+                ),
+                policy_hash=policy_hash,
+            )
+
+        if order.order_type not in policy.order_type_allowlist:
+            return Decision(
+                allowed=False,
+                rule="order_type_allowlist",
+                reason=(
+                    f"order_type {order.order_type!r} is not allowed "
+                    f"(allowed: {sorted(policy.order_type_allowlist)})"
+                ),
+                policy_hash=policy_hash,
+            )
+
+        if order.quantity > policy.max_quantity:
+            return Decision(
+                allowed=False,
+                rule="max_quantity",
+                reason=(
+                    f"quantity {order.quantity} exceeds maximum "
+                    f"{policy.max_quantity}"
+                ),
+                policy_hash=policy_hash,
+            )
+
+        if (
+            order.side == "buy"
+            and order.notional > policy.max_gross_buy_notional_usd
+        ):
+            return Decision(
+                allowed=False,
+                rule="max_gross_buy_notional_usd",
+                reason=(
+                    f"gross buy notional {order.notional} exceeds maximum "
+                    f"{policy.max_gross_buy_notional_usd}"
+                ),
+                policy_hash=policy_hash,
+            )
+
         return Decision(
-            allowed=False,
-            rule="ENGINE_NOT_IMPLEMENTED",
-            reason=(
-                "Policy rules are not implemented yet; TradePreflight is "
-                "failing closed."
-            ),
-            policy_hash=self._policy.sha256(),
+            allowed=True,
+            rule="policy",
+            reason="Order complies with policy",
+            policy_hash=policy_hash,
         )
