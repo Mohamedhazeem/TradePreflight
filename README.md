@@ -8,11 +8,10 @@ they satisfy an operator-owned policy. It is deterministic, local-first, and
 fail-closed: if the plugin cannot prove an order is compliant, the order does not
 execute.
 
-> **Project status: architectural scaffold.** The domain contracts, adapters,
-> policy schema, audit store, tool registration, and fail-closed hook are in
-> place. `PolicyEngine.evaluate()` and the paper-trading ledger writes are
-> intentionally unimplemented and currently **block every guarded order**. That
-> is the safe default. See [Roadmap](#roadmap).
+> **Project status: Slice 0 and Slice 1 complete.** The interception gate and the
+> broker-agnostic adapter/Decimal layer are live. The policy rule engine (Slice 2)
+> is still scaffolded and currently fails closed, so `trade_check` reports
+> `BLOCK` for every order until the rules are implemented.
 
 ---
 
@@ -27,6 +26,7 @@ execute.
 - [Audit lifecycle](#audit-lifecycle)
 - [Security boundaries](#security-boundaries)
 - [Development](#development)
+- [Roadmap](#roadmap)
 - [License](#license)
 
 ---
@@ -315,6 +315,21 @@ Repository conventions:
 - `tests/integration/` exercises hooks, tools, and SQLite together.
 - Do not add third-party financial libraries. The allowed dependency surface is
   the Python Standard Library plus PyYAML for YAML configuration.
+
+## Roadmap
+
+| Slice | Deliverable | State |
+|---|---|---|
+| 0 | Interception gate, 100-share quantity check, handler counter | **Done** |
+| 1 | `NormalizedOrder`, strict `Decimal` validation, Broker A/B adapters | **Done** |
+| 2 | Policy loading, schema validation, rule engine | Scaffolded (engine still fails closed) |
+| 3 | Paper ledger writes, outcome correlation, `trade_audit` | Audit store done; ledger writes pending |
+| 4 | Demo, hardening, full integration suite | Pending |
+
+Until Slice 2 is complete, `PolicyEngine.evaluate()` returns a blocking decision
+with rule `ENGINE_NOT_IMPLEMENTED`, and `trade_check` therefore reports `BLOCK`
+for every order. The live `pre_tool_call` gate uses the Slice 0 100-share
+quantity check, so a 50-share order is allowed and a 500-share order is blocked.
 
 ## License
 

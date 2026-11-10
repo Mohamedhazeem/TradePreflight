@@ -1,16 +1,14 @@
 """Paper-trading tool schemas and handlers (Broker A and Broker B).
 
-Status: **scaffold.** Both handlers normalize and validate their arguments, but
-the ``paper_ledger`` writer is not implemented yet. They return a JSON
-``NOT_IMPLEMENTED`` payload instead of pretending an order was executed.
-
-When Slice 3 lands, each handler must insert exactly one row into
-``paper_ledger`` and return a ``{"status": "SUCCESS", ...}`` payload.
+Slice 0 implementation: each handler validates its arguments through the adapter,
+increments ``handler_invocation_count``, and returns a simulated success payload.
+No database write happens yet; that is Slice 3.
 """
 
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import Mapping
 from typing import Any
 
@@ -19,8 +17,10 @@ from ..adapters import get_adapter
 __all__ = [
     "PAPER_PLACE_ORDER_A",
     "PAPER_PLACE_ORDER_B",
+    "handler_invocation_count",
     "place_order_a",
     "place_order_b",
+    "reset_handler_invocation_count",
 ]
 
 _DECIMAL_STRING = (
@@ -33,7 +33,7 @@ PAPER_PLACE_ORDER_A: dict[str, Any] = {
     "description": (
         "Simulated Broker A equity order. This is a paper trade: no real broker "
         "or network call is made. Before execution, TradePreflight normalizes "
-        "the order and blocks it unless it satisfies the operator policy. "
+        "the order and blocks it unless it satisfies the Slice 0 quantity gate. "
         "Limit orders only; whole shares only."
     ),
     "parameters": {
@@ -73,7 +73,7 @@ PAPER_PLACE_ORDER_B: dict[str, Any] = {
         "Simulated Broker B equity order. This is a paper trade: no real broker "
         "or network call is made. Broker B uses ticker/direction/qty/price; the "
         "adapter normalizes it to the same canonical order as Broker A, so the "
-        "same policy applies. Limit orders only; whole shares only."
+        "same gate applies. Limit orders only; whole shares only."
     ),
     "parameters": {
         "type": "object",
@@ -106,6 +106,16 @@ PAPER_PLACE_ORDER_B: dict[str, Any] = {
     },
 }
 
+handler_invocation_count: int = 0
+_order_counter: int = 0
+
+
+def reset_handler_invocation_count() -> None:
+    """Reset the invocation counter. Intended for tests and fresh sessions."""
+    global handler_invocation_count, _order_counter
+    handler_invocation_count = 0
+    _order_counter = 0
+
 
 def _error(tool_name: str, message: str) -> str:
     return json.dumps(
@@ -114,23 +124,11 @@ def _error(tool_name: str, message: str) -> str:
     )
 
 
-def _not_implemented(tool_name: str, order: Any) -> str:
-    return json.dumps(
-        {
-            "status": "NOT_IMPLEMENTED",
-            "tool": tool_name,
-            "order": order.to_dict(),
-            "ledger_rows_written": 0,
-            "message": (
-                "Order validated, but the paper-ledger writer is not implemented "
-                "yet. No ledger row was written and no trade was simulated."
-            ),
-        },
-        sort_keys=True,
-    )
-
-
 def _handle(tool_name: str, args: Any) -> str:
+    global handler_invocation_count, _order_counter
+
+    handler_invocation_count += 1
+
     adapter = get_adapter(tool_name)
     if adapter is None:  # pragma: no cover - registry invariant
         return _error(tool_name, "No adapter is registered for this tool")
@@ -143,9 +141,19 @@ def _handle(tool_name: str, args: Any) -> str:
         # Handler boundary: never raise, never leak a traceback to the model.
         return _error(tool_name, f"{type(exc).__name__}: {exc}")
 
-    # TODO(Slice 3): insert one paper_ledger row using plugin_db and return
-    # {"status": "SUCCESS", "order_id": ..., "message": ...}.
-    return _not_implemented(tool_name, order)
+    _order_counter += 1
+    return json.dumps(
+        {
+            "status": "SUCCESS",
+            "order_id": f"mock-{_order_counter:04d}",
+            "message": (
+                f"Simulated {order.side} of {order.quantity} "
+                f"{order.symbol} shares executed."
+            ),
+            "order": order.to_dict(),
+        },
+        sort_keys=True,
+    )
 
 
 def place_order_a(args: Mapping[str, Any], **kwargs: Any) -> str:
