@@ -32,10 +32,16 @@ def store(tmp_path):
     return AuditStore(connection_factory=lambda: sqlite3.connect(str(tmp_path / "audit.db")))
 
 
-def test_allowed_order_is_audited_and_handler_runs(monkeypatch, policy, store):
+def test_allowed_order_is_audited_and_handler_runs(monkeypatch, policy, store, tmp_path):
     paper_trades.reset_handler_invocation_count()
     monkeypatch.setattr(gate, "load_policy", lambda: policy)
     monkeypatch.setattr(gate, "default_audit_store", lambda: store)
+    ledger_db = tmp_path / "ledger.db"
+    monkeypatch.setattr(
+        paper_trades,
+        "_ledger_connection_factory",
+        lambda: __import__("sqlite3").connect(str(ledger_db)),
+    )
 
     result = gate.pre_tool_call(
         tool_name="paper_place_order_a",
@@ -47,7 +53,9 @@ def test_allowed_order_is_audited_and_handler_runs(monkeypatch, policy, store):
     handler_result = paper_trades.place_order_a(
         {"symbol": "AAPL", "side": "buy", "quantity": "10", "order_type": "limit", "limit_price": "100.00"}
     )
-    assert json.loads(handler_result)["status"] == "SUCCESS"
+    parsed = json.loads(handler_result)
+    assert parsed["status"] == "SUCCESS"
+    assert parsed["ledger_row_id"] >= 1
 
     gate.post_tool_call(
         tool_name="paper_place_order_a",
@@ -55,6 +63,13 @@ def test_allowed_order_is_audited_and_handler_runs(monkeypatch, policy, store):
         status="success",
         tool_call_id="allow-1",
     )
+
+    import sqlite3
+
+    conn = sqlite3.connect(str(ledger_db))
+    rows = conn.execute("SELECT COUNT(*) FROM paper_ledger").fetchone()[0]
+    conn.close()
+    assert rows == 1
 
     rows = store.recent(10)
     assert any(r["tool_call_id"] == "allow-1" and r["decision"] == "EXECUTION_SUCCEEDED" for r in rows)

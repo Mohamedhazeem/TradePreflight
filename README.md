@@ -8,9 +8,9 @@ they satisfy an operator-owned policy. It is deterministic, local-first, and
 fail-closed: if the plugin cannot prove an order is compliant, the order does not
 execute.
 
-> **Project status: Slice 0, 1, and 2 complete.** The interception gate, the
-> broker-agnostic adapter/Decimal layer, and the policy rule engine are live.
-> Paper ledger writes (Slice 3) are still pending.
+> **Project status: Slice 0, 1, 2, and 3 complete.** The interception gate, the
+> broker-agnostic adapter/Decimal layer, the policy rule engine, and the
+> paper-trading ledger are live. Slice 4 (demo/hardening) remains.
 
 ---
 
@@ -322,12 +322,11 @@ Repository conventions:
 | 0 | Interception gate, 100-share quantity check, handler counter | **Done** |
 | 1 | `NormalizedOrder`, strict `Decimal` validation, Broker A/B adapters | **Done** |
 | 2 | Policy loading, schema validation, rule engine | **Done** |
-| 3 | Paper ledger writes, outcome correlation, `trade_audit` | Audit store done; ledger writes pending |
+| 3 | Paper ledger writes, outcome correlation, `trade_audit` | **Done** |
 | 4 | Demo, hardening, full integration suite | Pending |
 
-The policy engine now evaluates every guarded order against the operator policy.
-Until Slice 3 is complete, allowed orders return a simulated success payload
-without writing to `paper_ledger`.
+Allowed orders now write one row to `paper_ledger` and return a
+`{"status": "SUCCESS", ...}` payload. Blocked orders leave the ledger unchanged.
 
 ## License
 

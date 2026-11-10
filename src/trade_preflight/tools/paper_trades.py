@@ -1,15 +1,17 @@
 """Paper-trading tool schemas and handlers (Broker A and Broker B).
 
-Slice 0 implementation: each handler validates its arguments through the adapter,
-increments ``handler_invocation_count``, and returns a simulated success payload.
-No database write happens yet; that is Slice 3.
+Slice 3 implementation: each handler validates its arguments through the adapter,
+inserts one row into ``paper_ledger``, and returns a simulated success payload.
+No real broker or network call is made.
 """
 
 from __future__ import annotations
 
 import json
-import uuid
+import sqlite3
 from collections.abc import Mapping
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from ..adapters import get_adapter
@@ -28,12 +30,22 @@ _DECIMAL_STRING = (
     "send strings such as \"10\" or \"150.00\"."
 )
 
+_PLUGIN_NAME = "trade-preflight"
+_SCHEMA_PATH = Path(__file__).resolve().parent.parent / "services" / "schema.sql"
+
+
+def _default_ledger_connection_factory():
+    from plugins.plugin_storage import plugin_db
+
+    return plugin_db(_PLUGIN_NAME)
+
+
 PAPER_PLACE_ORDER_A: dict[str, Any] = {
     "name": "paper_place_order_a",
     "description": (
         "Simulated Broker A equity order. This is a paper trade: no real broker "
         "or network call is made. Before execution, TradePreflight normalizes "
-        "the order and blocks it unless it satisfies the Slice 0 quantity gate. "
+        "the order and blocks it unless it satisfies the operator policy. "
         "Limit orders only; whole shares only."
     ),
     "parameters": {
@@ -73,7 +85,7 @@ PAPER_PLACE_ORDER_B: dict[str, Any] = {
         "Simulated Broker B equity order. This is a paper trade: no real broker "
         "or network call is made. Broker B uses ticker/direction/qty/price; the "
         "adapter normalizes it to the same canonical order as Broker A, so the "
-        "same gate applies. Limit orders only; whole shares only."
+        "same policy applies. Limit orders only; whole shares only."
     ),
     "parameters": {
         "type": "object",
@@ -124,6 +136,34 @@ def _error(tool_name: str, message: str) -> str:
     )
 
 
+_ledger_connection_factory = _default_ledger_connection_factory
+
+
+def _insert_ledger(order) -> int:
+    """Insert one row into ``paper_ledger`` and return its row id."""
+    connection = _ledger_connection_factory()
+    try:
+        connection.executescript(_SCHEMA_PATH.read_text(encoding="utf-8"))
+        cursor = connection.execute(
+            """
+            INSERT INTO paper_ledger (symbol, side, quantity, price, notional, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                order.symbol,
+                order.side,
+                str(order.quantity),
+                str(order.limit_price),
+                str(order.notional),
+                datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            ),
+        )
+        connection.commit()
+        return int(cursor.lastrowid)
+    finally:
+        connection.close()
+
+
 def _handle(tool_name: str, args: Any) -> str:
     global handler_invocation_count, _order_counter
 
@@ -141,11 +181,17 @@ def _handle(tool_name: str, args: Any) -> str:
         # Handler boundary: never raise, never leak a traceback to the model.
         return _error(tool_name, f"{type(exc).__name__}: {exc}")
 
+    try:
+        ledger_row_id = _insert_ledger(order)
+    except Exception as exc:
+        return _error(tool_name, f"Ledger write failed: {type(exc).__name__}: {exc}")
+
     _order_counter += 1
     return json.dumps(
         {
             "status": "SUCCESS",
             "order_id": f"mock-{_order_counter:04d}",
+            "ledger_row_id": ledger_row_id,
             "message": (
                 f"Simulated {order.side} of {order.quantity} "
                 f"{order.symbol} shares executed."
