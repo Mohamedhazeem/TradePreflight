@@ -65,13 +65,13 @@ jobs:
       - name: Install development dependencies with a release-age cutoff
         run: |
           uv venv --python 3.12
-          uv pip install --exclude-newer 2026-08-01 -r requirements-dev.txt
+          uv pip install --python .venv/bin/python --exclude-newer 2026-08-01 -r requirements-dev.txt
 
       - name: Run the test suite
-        run: uv run pytest
+        run: .venv/bin/python -m pytest
 
       - name: Run the demo story
-        run: uv run python demo/story.py --quiet
+        run: .venv/bin/python demo/story.py --quiet
 
   validate:
     name: hermes plugins validate
