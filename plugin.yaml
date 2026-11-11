@@ -8,7 +8,8 @@ description: >-
   policy, and blocks anything that cannot be proven compliant.
 author: TradePreflight Contributors
 license: MIT
-homepage: https://github.com/tradepreflight/trade-preflight
+homepage: https://github.com/Mohamedhazeem/TradePreflight
+requires_hermes: ">=0.23.1"
 tags:
   - trading
   - guardrails

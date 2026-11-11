@@ -33,11 +33,7 @@ classifiers = [
     "Topic :: Office/Business :: Financial :: Investment",
     "Typing :: Typed",
 ]
-# PyYAML is used only for operator-facing configuration formats.
-# Financial math is Standard Library Decimal only. No broker SDKs, no HTTP clients.
-dependencies = [
-    "PyYAML>=6.0,<7.0",
-]
+dependencies = []
 
 [project.optional-dependencies]
 dev = [

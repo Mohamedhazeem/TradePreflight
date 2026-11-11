@@ -60,7 +60,7 @@ read-only `trade_policy_get` tool. The model cannot edit it.
 ### Install as a native Hermes plugin
 
 ```bash
-git clone https://github.com/tradepreflight/trade-preflight.git
+git clone https://github.com/Mohamedhazeem/TradePreflight.git
 cp -R trade-preflight ~/.hermes/plugins/trade-preflight
 hermes plugins enable trade-preflight
 hermes plugins doctor trade-preflight --ci
@@ -312,7 +312,6 @@ audit trail, and reports `Handler invocation count: 1` and
 ## Development
 
 ```bash
-cd trade-preflight
 python -m compileall -q src
 pytest
 hermes plugins doctor . --ci
@@ -325,7 +324,7 @@ Repository conventions:
 - `tests/unit/` contains pure domain/adapter/engine tests.
 - `tests/integration/` exercises hooks, tools, and SQLite together.
 - Do not add third-party financial libraries. The allowed dependency surface is
-  the Python Standard Library plus PyYAML for YAML configuration.
+  the Python Standard Library.
 
 ## License
 
