@@ -1,0 +1,7 @@
+{
+  "max_buy_notional_usd": "10000.00",
+  "max_quantity": 200,
+  "symbol_allowlist": ["AAPL", "MSFT"],
+  "order_type_allowlist": ["limit"],
+  "side_allowlist": ["buy"]
+}

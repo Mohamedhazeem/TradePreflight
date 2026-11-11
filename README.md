@@ -335,21 +335,32 @@ outbound HTTP request of any kind.
 
 ## Demo
 
-Run the reproducible demo at any time:
-
 ```bash
-python scripts/demo.py
+./demo/run_demo.sh
 ```
 
-It executes the three storyboard orders against the live plugin code, prints the
-audit trail, and reports `Handler invocation count: 1` and
-`Paper ledger rows: 1` — the same evidence the 90-second video shows.
+One command, two halves:
+
+1. **The offline story** — the real plugin code driving the real gate
+   against a temporary workspace. Six acts: a compliant order executes, a
+   notional breach and a quantity breach are blocked, the same policy blocks
+   the other broker's schema, garbage arguments and a broken policy are
+   refused, and the audit trail and the paper ledger close the case.
+   Ten tool calls, two handler invocations, two ledger rows.
+2. **The live half** — the exact prompts to paste into Hermes, where the same
+   gate fires on a real conversation.
+
+No Hermes, no network, no credentials, no broker account. The 90-second video
+plan is in [`demo/STORYBOARD.md`](demo/STORYBOARD.md), and the story's claims
+are asserted by `tests/integration/test_demo_story.py`, so the recording
+cannot drift from the plugin's real behaviour.
 
 ## Development
 
 ```bash
 python -m compileall -q src
 pytest
+python demo/story.py
 hermes plugins validate . --install-deps
 hermes plugins doctor . --ci
 ```

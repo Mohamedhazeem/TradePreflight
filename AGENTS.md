@@ -189,6 +189,8 @@ The ledger is append-only. Do not update or delete rows.
 - `services/` — orchestration and persistence (policy loading, engine, audit).
 - `tools/` — Hermes tool schemas and handlers.
 - `hooks/` — Hermes lifecycle wiring and fail-closed enforcement.
+- `demo/` — the recorded walkthrough fixture. It drives the real plugin code
+  and asserts nothing of its own.
 - Dependencies point inward: `hooks/tools -> services -> adapters/domain`.
   `domain` imports nothing from the other layers.
 - Depend on abstractions (`BrokerAdapter`), not concrete broker modules.
@@ -231,11 +233,23 @@ the plugin manager's workspace.
 - **Declare capabilities truthfully.** `plugin.yaml` `provides_tools` /
   `provides_hooks` must match what `register(ctx)` registers, and the catalog
   entry's `capabilities:` block must match the manifest.
+- **The demo drives the real plugin.** `demo/story.py` calls the same hooks,
+  adapters, engine and handlers Hermes calls. Never re-implement the gate
+  inside the demo, and never let the demo write outside its temporary
+  workspace or into `plugin_data_dir("trade-preflight")`.
+- **The demo's claims are asserted.** Every statement in `demo/README.md` and
+  `demo/STORYBOARD.md` has a matching assertion in
+  `tests/integration/test_demo_story.py`. If the behaviour changes, the test
+  changes with it — the recording must never be able to lie.
+- **No recordings in the repository.** Videos, GIFs, screen captures and
+  binaries belong on the docs site or a release asset, never in git (catalog
+  rule 17).
 
 ## 10. Definition of done
 
 - [ ] `python -m compileall src` passes.
 - [ ] `pytest` passes with no network access.
+- [ ] `python demo/story.py` runs clean (the recorded story still works).
 - [ ] `hermes plugins validate . --install-deps` passes.
 - [ ] `hermes plugins doctor . --ci` passes.
 - [ ] `plugin.yaml` `provides_tools` / `provides_hooks` match `register(ctx)`.

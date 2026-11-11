@@ -40,6 +40,11 @@ jobs:
       - name: Run the test suite
         run: pytest
 
+      # The recorded walkthrough must keep working: the demo drives the real
+      # plugin code, and its claims are asserted in the test suite.
+      - name: Run the demo story
+        run: python demo/story.py --quiet
+
   dependency-quarantine:
     name: dependency release quarantine
     runs-on: ubuntu-latest
@@ -64,6 +69,9 @@ jobs:
 
       - name: Run the test suite
         run: uv run pytest
+
+      - name: Run the demo story
+        run: uv run python demo/story.py --quiet
 
   validate:
     name: hermes plugins validate
