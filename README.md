@@ -326,6 +326,19 @@ Repository conventions:
 - Do not add third-party financial libraries. The allowed dependency surface is
   the Python Standard Library.
 
+## Roadmap
+
+| Slice | Deliverable | State |
+|---|---|---|
+| 0 | Interception gate, 100-share quantity check, handler counter | **Done** |
+| 1 | `NormalizedOrder`, strict `Decimal` validation, Broker A/B adapters | **Done** |
+| 2 | Policy loading, schema validation, rule engine | **Done** |
+| 3 | Paper ledger writes, outcome correlation, `trade_audit` | **Done** |
+| 4 | Demo, hardening, full integration suite | **Done** |
+
+Allowed orders now write one row to `paper_ledger` and return a
+`{"status": "SUCCESS", ...}` payload. Blocked orders leave the ledger unchanged.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
