@@ -207,12 +207,39 @@ The ledger is append-only. Do not update or delete rows.
   the policy file. This is a documented limitation, not a feature.
 - Do not add telemetry, analytics, or outbound HTTP.
 
-## 9. Definition of done
+## 9. Packaging and Hermes integration
+
+These rules are not stylistic. Breaking them breaks installation, updates, or
+the plugin manager's workspace.
+
+- **The plugin root is not a Python distribution.** `pyproject.toml` holds
+  tooling configuration only (pytest, coverage, ruff). Never add a
+  `[project]` or `[build-system]` table: the Hermes plugin manager treats a
+  directory with a `[project]` table as an installable uv workspace member
+  named after the project, which collides with the plugin id
+  (`trade-preflight`) and breaks `uv lock` and `hermes plugins enable` when
+  more than one profile has the plugin enabled. Development dependencies live
+  in `requirements-dev.txt`.
+- **Import the implementation with relative imports.** The root `__init__.py`
+  must use `from .src.trade_preflight...`. Hermes evicts plugin modules from
+  `sys.modules` under the `hermes_plugins.<slug>` namespace only. A top-level
+  `trade_preflight` package survives the eviction, so an updated plugin would
+  keep running the previous version's code, and a second Hermes profile would
+  reuse the first profile's modules.
+- **Never commit `__pycache__`, `*.pyc`, binaries, or archives.** The catalog
+  admission scanner refuses a plugin that ships unscannable payloads.
+- **Declare capabilities truthfully.** `plugin.yaml` `provides_tools` /
+  `provides_hooks` must match what `register(ctx)` registers, and the catalog
+  entry's `capabilities:` block must match the manifest.
+
+## 10. Definition of done
 
 - [ ] `python -m compileall src` passes.
 - [ ] `pytest` passes with no network access.
+- [ ] `hermes plugins validate . --install-deps` passes.
 - [ ] `hermes plugins doctor . --ci` passes.
 - [ ] `plugin.yaml` `provides_tools` / `provides_hooks` match `register(ctx)`.
+- [ ] The catalog draft in `plugin-catalog/` matches the manifest.
 - [ ] No float literals in financial code paths.
 - [ ] Every new policy rule has a unit test.
 - [ ] Fail-closed behavior is covered by a test that injects an exception.

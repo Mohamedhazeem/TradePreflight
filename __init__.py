@@ -1,9 +1,17 @@
 """Hermes entry point for the TradePreflight plugin.
 
 Hermes loads a native directory plugin by importing this module and calling
-``register(ctx)``. The implementation lives in ``src/trade_preflight``; this
-shim puts the bundled ``src`` directory on ``sys.path`` so the package resolves
-for both directory installs and editable installs.
+``register(ctx)``. The implementation lives in ``src/trade_preflight`` and is
+imported with *relative* imports so every module is loaded underneath the
+``hermes_plugins.<slug>`` namespace that Hermes owns.
+
+Why relative imports matter: Hermes evicts plugin modules from ``sys.modules``
+by that namespace prefix before (re)loading a plugin. A top-level
+``trade_preflight`` package would survive the eviction, so an updated plugin
+would keep running the previous version's code, and a second Hermes profile
+would silently reuse the first profile's modules. Relative imports keep the
+whole implementation inside ``hermes_plugins.trade_preflight.*`` where the
+eviction applies.
 
 Registration failures are intentionally *not* swallowed: a security plugin that
 cannot register must fail loudly rather than load in a half-wired state.
@@ -11,21 +19,13 @@ cannot register must fail loudly rather than load in a half-wired state.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from typing import Any
-
-_PLUGIN_ROOT = Path(__file__).resolve().parent
-_SRC = _PLUGIN_ROOT / "src"
-
-if str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
 
 
 def register(ctx: Any) -> None:
     """Register TradePreflight tools and hooks with Hermes."""
-    from trade_preflight.hooks import execution_gate
-    from trade_preflight.tools import admin, paper_trades
+    from .src.trade_preflight.hooks import execution_gate
+    from .src.trade_preflight.tools import admin, paper_trades
 
     ctx.register_tool(
         name="paper_place_order_a",

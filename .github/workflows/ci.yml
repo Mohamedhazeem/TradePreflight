@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: pytest (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "${{ matrix.python-version }}"
+
+      - name: Install development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Byte-compile sources
+        run: python -m compileall -q src
+
+      - name: Run the test suite
+        run: pytest
+
+  dependency-quarantine:
+    name: dependency release quarantine
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+
+      # The plugin itself has zero runtime dependencies. This job applies the
+      # same release-age quarantine Hermes applies to its own dependencies, so a
+      # compromised or freshly published release cannot reach a developer
+      # machine through the dev requirements.
+      - name: Install development dependencies with a release-age cutoff
+        run: |
+          uv venv --python 3.12
+          uv pip install --exclude-newer 2026-08-01 -r requirements-dev.txt
+
+      - name: Run the test suite
+        run: uv run pytest
+
+  validate:
+    name: hermes plugins validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Hermes (non-interactive, stable channel)
+        run: |
+          curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --non-interactive --channel stable
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Same check the Hermes catalog CI runs against the pinned commit.
+      - name: Validate the plugin
+        run: hermes plugins validate . --install-deps
+
+      - name: Doctor the plugin
+        run: hermes plugins doctor . --ci
+
+  payload-scan:
+    name: no unscannable payloads
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Catalog admission rule: a listed plugin must ship reviewable source.
+      # Committed Python bytecode (or an archive hiding one) is refused.
+      - name: Fail on committed bytecode or archives
+        run: |
+          if git ls-files | grep -Ei '(\.py[co]$)|(^|/)__pycache__/'; then
+            echo "::error::committed Python bytecode found — remove it (rule 17)"
+            exit 1
+          fi
+          if git ls-files | grep -Ei '\.(zip|tar|tar\.gz|tgz|whl|egg|so|dylib|dll|exe|bin|wasm)$'; then
+            echo "::error::binary or archive payload committed — remove it (rule 17)"
+            exit 1
+          fi
+          echo "payload scan clean"

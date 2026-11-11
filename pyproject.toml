@@ -1,51 +1,18 @@
-[build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "trade-preflight"
-version = "0.1.0"
-description = "Deterministic, fail-closed execution firewall for AI-initiated equity orders."
-readme = "README.md"
-requires-python = ">=3.10"
-license = { text = "MIT" }
-authors = [
-    { name = "TradePreflight Contributors" },
-]
-keywords = [
-    "hermes",
-    "hermes-plugin",
-    "trading",
-    "guardrails",
-    "execution-firewall",
-    "paper-trading",
-]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Financial and Insurance Industry",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Office/Business :: Financial :: Investment",
-    "Typing :: Typed",
-]
-dependencies = []
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0,<9.0",
-    "pytest-cov>=5.0,<7.0",
-]
-
-[tool.setuptools]
-package-dir = { "" = "src" }
-
-[tool.setuptools.packages.find]
-where = ["src"]
+# Tooling configuration only.
+#
+# This project is a *Hermes native plugin*, not a distributable Python
+# package. It is installed by Hermes (or copied into `~/.hermes/plugins/`),
+# not by `pip install`.
+#
+# There is deliberately no `[project]` / `[build-system]` table here: the Hermes
+# plugin manager treats a directory with a `[project]` table as an installable
+# workspace member named after the project, which collides with the plugin id
+# (`trade-preflight`) and breaks `uv lock` / `hermes plugins enable` when more
+# than one profile has the plugin enabled.
+#
+# Development dependencies live in `requirements-dev.txt`:
+#
+#   python -m pip install -r requirements-dev.txt
 
 [tool.pytest.ini_options]
 minversion = "8.0"

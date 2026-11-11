@@ -53,15 +53,23 @@ read-only `trade_policy_get` tool. The model cannot edit it.
 ### Requirements
 
 - Python 3.10+
-- Hermes Agent with native plugin support
-- PyYAML 6.x
+- Hermes Agent >= 0.23.1 with native plugin support
+- No third-party Python packages. The plugin imports only the standard library
+  and the documented `plugins.plugin_storage` helper.
 - No broker account, API key, or network access is required
 
 ### Install as a native Hermes plugin
 
 ```bash
+hermes plugins install trade-preflight
+hermes plugins doctor trade-preflight --ci
+```
+
+Or install from a checkout:
+
+```bash
 git clone https://github.com/Mohamedhazeem/TradePreflight.git
-cp -R trade-preflight ~/.hermes/plugins/trade-preflight
+cp -R TradePreflight ~/.hermes/plugins/trade-preflight
 hermes plugins enable trade-preflight
 hermes plugins doctor trade-preflight --ci
 ```
@@ -71,15 +79,25 @@ Restart Hermes (or the gateway) so the plugin is loaded.
 ### Install for local development
 
 ```bash
-cd trade-preflight
+cd TradePreflight
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[dev]"
+python -m pip install -r requirements-dev.txt
 pytest
 ```
 
-The package uses a `src/` layout. The root `__init__.py` is the Hermes entry
-point and bootstraps `src/` onto `sys.path` for directory installs.
+This repository is a Hermes native plugin, not a distributable Python package.
+The root `__init__.py` is the Hermes entry point; the implementation lives in
+`src/trade_preflight` and is imported with *relative* imports, so every module
+is loaded under the `hermes_plugins.trade-preflight` namespace Hermes owns and
+is evicted correctly when the plugin is updated or reloaded.
+
+`pyproject.toml` holds tooling configuration only (pytest, coverage, ruff) and
+`requirements-dev.txt` holds the development dependencies. There is no
+`[project]` table on purpose: a `[project]` table makes the plugin manager
+treat the plugin directory as an installable workspace member named
+`trade-preflight`, which collides with the plugin id and breaks `uv lock` /
+`hermes plugins enable` when more than one profile has the plugin enabled.
 
 ### Operator data locations
 
@@ -297,6 +315,24 @@ outside any directory the agent can write.
 - The plugin is not a substitute for a broker's own risk controls or regulatory
   obligations.
 
+### Disclosure
+
+What a user gets when installing the plugin:
+
+| Behaviour | TradePreflight |
+|---|---|
+| Network calls to third-party services | None |
+| Telemetry / analytics / usage reporting | None |
+| Shell commands or subprocesses | None |
+| Background or long-running processes | None |
+| Stored credentials | None — the plugin declares no `requires_env` and reads no credential store |
+| Reads outside the plugin directory | None |
+| Reads inside the plugin directory | `policies/default.json`, copied once into the plugin data directory to seed the operator policy |
+| Writes | Only inside `plugin_data_dir("trade-preflight")`: the operator policy file and the SQLite audit/ledger database |
+
+The plugin is pure Python with zero third-party dependencies and makes no
+outbound HTTP request of any kind.
+
 ## Demo
 
 Run the reproducible demo at any time:
@@ -314,8 +350,11 @@ audit trail, and reports `Handler invocation count: 1` and
 ```bash
 python -m compileall -q src
 pytest
+hermes plugins validate . --install-deps
 hermes plugins doctor . --ci
 ```
+
+CI runs the same commands on every push (see `.github/workflows/ci.yml`).
 
 Repository conventions:
 
